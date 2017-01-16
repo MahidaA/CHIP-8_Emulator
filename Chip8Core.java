@@ -147,13 +147,36 @@ public class Chip8Core
 			switch (opcode & 0xF)
 			{
 			case 0x0:  //8XY0 - set Vx equal to Vy
+				V[(opcode & 0x0F00) >> 8] = V[(opcode & 0x00F0) >> 4];
 				break;
 				
 			case 0x1:  //8XY1 - set Vx equal to Vx BITWISE OR Vy
+				V[(opcode & 0x0F00) >> 8] = (short) (V[(opcode & 0x0F00) >> 8] | V[(opcode & 0x00F0) >> 4]);
 				break;
 				
 			case 0x2:  //8XY2 - set Vx equal to Vx BITWISE AND Vy
+				V[(opcode & 0x0F00) >> 8] = (short) (V[(opcode & 0x0F00) >> 8] & V[(opcode & 0x00F0) >> 4]);
 				break;
+				
+			case 0x3:  //8XY3 - set Vx equal to Vx BITWISE XOR Vy
+				V[(opcode & 0x0F00) >> 8] = (short) (V[(opcode & 0x0F00) >> 8] ^ V[(opcode & 0x00F0) >> 4]);
+				break;
+				
+			case 0x4:  //8XY4 - set Vx equal to the last 8 bits of Vx + Vy, set V[F] to 1 if the result is greater than 255
+				V[(opcode & 0x0F00) >> 8] = (short) (V[(opcode & 0x0F00) >> 8] + V[(opcode & 0x00F0) >> 4]);
+				if (V[(opcode & 0x0F00) >> 8] > 255)
+					V[0xF] = 1;
+				else
+					V[0xF] = 0;
+				V[(opcode & 0x0F00) >> 8] = (short) (V[(opcode & 0x0F00) >> 8] & 0xFF);
+				break;
+				
+			case 0x5:  //8XY5 - set Vx equal to Vx - Vy, set V[F} to 1 if Vx > Vy
+				if (V[(opcode & 0x0F00) >> 8] > V[(opcode & 0x00F0) >> 4])
+					V[0xF] = 1;
+				else
+					V[0xF] = 0;
+				V[(opcode & 0x0F00) >> 8] = (short) (V[(opcode & 0x0F00) >> 8] - V[(opcode & 0x00F0) >> 4]);
 			}
 			break;
 		

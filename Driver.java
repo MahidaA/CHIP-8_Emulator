@@ -16,11 +16,11 @@ public class Driver
 	 */
 	public static void main(String[] args)
 	{
-		Chip8Core c8 = new Chip8Core();
+		Core c8 = new Core();
 		String filename = "PONG";
 		
 		c8.init();
-		c8.open_file(filename);
+		c8.load_file(filename);
 		
 		System.out.println("Success");
 	}

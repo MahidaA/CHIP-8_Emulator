@@ -3,7 +3,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
 
-public class Chip8Core
+public class Core
 {
 	//Font data for CHIP-8 (will be stored in unused section of memory)
 	short[] chip8_fontset =
@@ -44,7 +44,7 @@ public class Chip8Core
 	
 	void init()
 	{
-		/*Originally, the CHIP-8 interpreter would be stored in the first 512 bytes of memory
+		/* Originally, the CHIP-8 interpreter would be stored in the first 512 bytes of memory
 		 * but we don't need that so we can just store font data in there instead.
 		 */
 		for (int i = 0; i < chip8_fontset.length; i++)
@@ -53,7 +53,7 @@ public class Chip8Core
 		}
 	}
 	
-	void open_file(String filename)
+	void load_file(String filename)
 	{	
 		try
 		{
@@ -80,6 +80,9 @@ public class Chip8Core
 	void run()
 	{
 		fetch_opcode();
+		
+		int x = (opcode & 0x0F00) >> 8;  //For instructions in the format _XY_
+		int y = (opcode & 0x00F0) >> 4;
 		
 		switch (opcode & 0xF000)
 		{
@@ -115,70 +118,97 @@ public class Chip8Core
 			break;
 			
 		case 0x3000:  //3XNN - if Vx == NN, skip the next instruction
-			if (V[(opcode & 0x0F00) >> 8] == (opcode & 0xFF))
+			if (V[x] == (opcode & 0xFF))
 			{
 				pc += 2;
 			}
 			break;
 		
 		case 0x4000:  //4XNN - if Vx != NN, skip the next instruction
-			if (V[(opcode & 0x0F00) >> 8] != (opcode & 0xFF))
+			if (V[x] != (opcode & 0xFF))
 			{
 				pc += 2;
 			}
 			break;
 		
 		case 0x5000:  //5XY0 - if Vx == Vy, skip the next instruction
-			if (V[(opcode & 0x0F00) >> 8] == V[(opcode & 0x00F0) >> 4])
+			if (V[x] == V[y])
 			{
 				pc += 2;
 			}
 			break;
 			
 		case 0x6000:  //6XNN - set Vx to NN
-			V[(opcode & 0x0F00) >> 8] = (short) (opcode & 0xFF);
+			V[x] = (short) (opcode & 0xFF);
 			break;
 			
 		case 0x7000:  //7XNN - add NN to Vx
-			V[(opcode & 0x0F00) >> 8] += (short) (opcode & 0xFF);
+			V[x] += (short) (opcode & 0xFF);
 			break;
 			
 		case 0x8000:
-			switch (opcode & 0xF)
+			switch (opcode & 0x000F)
 			{
 			case 0x0:  //8XY0 - set Vx equal to Vy
-				V[(opcode & 0x0F00) >> 8] = V[(opcode & 0x00F0) >> 4];
+				V[x] = V[y];
 				break;
 				
 			case 0x1:  //8XY1 - set Vx equal to Vx BITWISE OR Vy
-				V[(opcode & 0x0F00) >> 8] = (short) (V[(opcode & 0x0F00) >> 8] | V[(opcode & 0x00F0) >> 4]);
+				V[x] = (short) (V[x] | V[y]);
 				break;
 				
 			case 0x2:  //8XY2 - set Vx equal to Vx BITWISE AND Vy
-				V[(opcode & 0x0F00) >> 8] = (short) (V[(opcode & 0x0F00) >> 8] & V[(opcode & 0x00F0) >> 4]);
+				V[x] = (short) (V[x] & V[y]);
 				break;
 				
 			case 0x3:  //8XY3 - set Vx equal to Vx BITWISE XOR Vy
-				V[(opcode & 0x0F00) >> 8] = (short) (V[(opcode & 0x0F00) >> 8] ^ V[(opcode & 0x00F0) >> 4]);
+				V[x] = (short) (V[x] ^ V[y]);
 				break;
 				
 			case 0x4:  //8XY4 - set Vx equal to the last 8 bits of Vx + Vy, set V[F] to 1 if the result is greater than 255
-				V[(opcode & 0x0F00) >> 8] = (short) (V[(opcode & 0x0F00) >> 8] + V[(opcode & 0x00F0) >> 4]);
-				if (V[(opcode & 0x0F00) >> 8] > 255)
+				V[x] = (short) (V[x] + V[y]);
+				if (V[x] > 255)
 					V[0xF] = 1;
 				else
 					V[0xF] = 0;
-				V[(opcode & 0x0F00) >> 8] = (short) (V[(opcode & 0x0F00) >> 8] & 0xFF);
+				V[x] = (short) (V[x] & 0xFF);
 				break;
 				
-			case 0x5:  //8XY5 - set Vx equal to Vx - Vy, set V[F} to 1 if Vx > Vy
-				if (V[(opcode & 0x0F00) >> 8] > V[(opcode & 0x00F0) >> 4])
+			case 0x5:  //8XY5 - set Vx equal to Vx - Vy, set V[F] to 1 if Vx > Vy
+				if (V[x] > V[y])
 					V[0xF] = 1;
 				else
 					V[0xF] = 0;
-				V[(opcode & 0x0F00) >> 8] = (short) (V[(opcode & 0x0F00) >> 8] - V[(opcode & 0x00F0) >> 4]);
+				V[x] = (short) (V[x] - V[y]);
+				break;
+				
+			case 0x6:  //8XY6 - set Vx = Vx SHR 1
+				if ((V[x] & 1) == 1)
+					V[0xF] = 1;
+				else
+					V[0xF] = 0;
+				V[x] = (short) (V[x] >> 1);
+				break;
+				
+			case 0x7:  //8XY7 - set Vx = Vy - Vx, set V[F] to 1 if Vy > Vx
+				if (V[x] < V[y])
+					V[0xF] = 1;
+				else
+					V[0xF] = 0;
+				V[x] = (short) (V[y] - V[x]);
+				break;
+				
+			case 0xE: //8XYE - set Vx = Vx SHL 1
+				if ((V[x] & 1) == 1)
+					V[0xF] = 1;
+				else
+					V[0xF] = 0;
+				V[x] = (short) (V[x] << 1);
+				break;
 			}
+			
 			break;
+			
 		
 		default:
 			System.out.println("Error: unrecognized opcode 0x" + Integer.toHexString(opcode));

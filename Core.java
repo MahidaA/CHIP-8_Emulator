@@ -2,6 +2,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Random;
 
 public class Core
 {
@@ -35,12 +36,14 @@ public class Core
 	short pc = 0x200;  //Program counter
 	
 	short sound_timer = 0;
-	short display_timer = 0;
+	short delay_timer = 0;
 	
-	boolean[][] display = new boolean[64][32];  //Screen display (each pixel is either on or off)
-	boolean[][] keypad = new boolean[4][4];  //16-button keypad (each button is either pressed or not)
+	short[][] display = new short[64][32];  //Screen display (each pixel is either on or off)
+	short[] keypad = new short[16];  //16-button keypad (each button is either pressed or not)
 	
 	short opcode = 0;
+	
+	Random rd = new Random();  //Used by the CXKK instruction
 	
 	void init()
 	{
@@ -90,9 +93,9 @@ public class Core
 			switch (opcode & 0x00FF)
 			{
 			case 0xE0:  //00E0 - clear the screen
-				for(boolean[] row : display)
+				for(short[] row : display)
 				{
-					Arrays.fill(row, false);
+					Arrays.fill(row, (short) 0);
 				}
 				break;
 				
@@ -166,7 +169,7 @@ public class Core
 				break;
 				
 			case 0x4:  //8XY4 - set Vx equal to the last 8 bits of Vx + Vy, set V[F] to 1 if the result is greater than 255
-				V[x] = (short) (V[x] + V[y]);
+				V[x] += V[y];
 				if (V[x] > 255)
 					V[0xF] = 1;
 				else
@@ -179,7 +182,7 @@ public class Core
 					V[0xF] = 1;
 				else
 					V[0xF] = 0;
-				V[x] = (short) (V[x] - V[y]);
+				V[x] -= V[y];
 				break;
 				
 			case 0x6:  //8XY6 - set Vx = Vx SHR 1
@@ -205,10 +208,85 @@ public class Core
 					V[0xF] = 0;
 				V[x] = (short) (V[x] << 1);
 				break;
+				
+			default:
+				System.out.println("Error: unrecognized opcode 0x" + Integer.toHexString(opcode & 0xFFFF));
+				break;
 			}
 			
 			break;
 			
+		case 0x9000:  //9XY0 - skip next instruction if Vx != Vy
+			if (V[x] != V[y])
+				pc += 2;
+			break;
+			
+		case 0xA000:  //ANNN - set the value of register I to nnn
+			I = (short) (opcode & 0xFFF);
+			break;
+			
+		case 0xB000:  //BNNN - set PC to nnn + V[0]
+			pc = (short) ((opcode & 0xFFF) + V[0]);
+			break;
+			
+		case 0xC000:  //CXKK - set Vx to a random number from 0 to 255 BITWISE ANDed with kk
+			V[x] = (short) (rd.nextInt(256) & (opcode & 0xFF));
+			break;
+			
+		case 0xD000:  //DXYN - display n-byte sprite starting at mem[I] at (Vx, Vy) (see Cowgod's site for more)
+			V[0xF] = 0;
+			short pixel_value;
+			for (short i = 0; i < (opcode & 0xF); i++)
+			{
+				for (short j = 0; j < 8; j++)
+				{
+					pixel_value = (short) ((mem[I + i] >> (7-j)) & 1);
+					if (pixel_value != display[(V[x] + j) % 64][(V[y] + i) % 32])
+					{
+						V[0xF] = 1;
+						display[(V[x] + j) % 64][(V[y] + i) % 32] = pixel_value;
+					}
+				}
+			}
+			break;
+			
+		case 0xE000:
+			switch (opcode & 0x000F)
+			{
+			case 0xE:  //EX9E - skip next instruction if key of value Vx is pressed
+				if (keypad[V[x]] == 1)
+				{
+					pc += 2;
+				}
+				break;
+				
+			case 0x1:  //EXA1 - skip next instruction if key of value Vx is not pressed
+				if (keypad[V[x]] == 0)
+				{
+					pc += 2;
+				}
+				break;
+				
+			default:
+				System.out.println("Error: unrecognized opcode 0x" + Integer.toHexString(opcode & 0xFFFF));
+				break;
+			}
+			break;
+			
+		case 0xF000:
+			switch (opcode & 0xFF)
+			{
+			case 0x07:  //FX07 - set Vx to delay timer
+				V[x] = delay_timer;
+				break;
+				
+			case 0x0A:  //FX0A - wait for a key press and store its value in Vx
+				
+			default:
+				System.out.println("Error: unrecognized opcode 0x" + Integer.toHexString(opcode & 0xFFFF));
+				break;
+			}
+			break;
 		
 		default:
 			System.out.println("Error: unrecognized opcode 0x" + Integer.toHexString(opcode));
@@ -217,14 +295,15 @@ public class Core
 		
 		//Only increment pc if the instruction was not a jump or subroutine call
 		if ((opcode & 0xF000) != 0x1000 && 
-			(opcode & 0xF000) != 0x2000)
+			(opcode & 0xF000) != 0x2000 &&
+			(opcode & 0xF000) != 0xB000)
 		{
 			pc += 2;
 		}
 		
-		if (display_timer > 0)
+		if (delay_timer > 0)
 		{
-			display_timer--;
+			delay_timer--;
 		}
 		
 		if (sound_timer > 0)

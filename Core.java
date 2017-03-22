@@ -280,7 +280,42 @@ public class Core
 				V[x] = delay_timer;
 				break;
 				
-			case 0x0A:  //FX0A - wait for a key press and store its value in Vx
+			case 0x0A:  //FX0A - wait for a key press and store its value in Vx, halting execution until a key is pressed
+				boolean key_pressed = false;
+				
+				for (short i = 0; i < 16; i++)
+				{
+					if (keypad[i] != 0)
+					{
+						key_pressed = true;
+						V[x] = i;
+						break;
+					}
+				}
+				
+				//If a key was not pressed, the cycle ends immediately, skipping the incrementing/decrementing of
+				//the PC and the timers. The next cycle will be a repeat of this instruction until a key is pressed.
+				if (!key_pressed)
+				{
+					return;
+				}
+				break;
+				
+			case 0x15:  //FX15 - set the delay timer equal to the value of V[x]
+				delay_timer = V[x];
+				break;
+				
+			case 0x18:  //FX18 - set the sound timer equal to the value of V[x]
+				sound_timer = V[x];
+				break;
+				
+			case 0x1E:  //FX1E - set I = I + V[x]
+				I += V[x];
+				break;
+				
+			case 0x29:  //FX29 - "The value of I is set to the location for the hexadecimal sprite corresponding to the value of Vx."
+				
+				break;
 				
 			default:
 				System.out.println("Error: unrecognized opcode 0x" + Integer.toHexString(opcode & 0xFFFF));
